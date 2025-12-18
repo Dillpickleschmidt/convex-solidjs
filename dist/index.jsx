@@ -54,6 +54,10 @@ function useQuery(query, args, options) {
       return { args: getArgs() };
     },
     async (source) => {
+      const opts = getOptions();
+      if (isServer && opts.initialData !== void 0) {
+        return opts.initialData;
+      }
       if (isServer && httpClient) {
         return await httpClient.query(query, source.args);
       }
@@ -62,7 +66,6 @@ function useQuery(query, args, options) {
         if (result !== void 0) return result;
       } catch {
       }
-      const opts = getOptions();
       if (opts.initialData !== void 0 && !hasReceivedData()) {
         return opts.initialData;
       }

@@ -106,7 +106,13 @@ export function useQuery<Query extends FunctionReference<'query'>>(
       return { args: getArgs() }
     },
     async source => {
-      // Server: use HTTP client to actually fetch data (enables Suspense)
+      // Server: if initialData provided (e.g., from authenticated loader), use it
+      const opts = getOptions()
+      if (isServer && opts.initialData !== undefined) {
+        return opts.initialData
+      }
+
+      // Server: use HTTP client to fetch data (enables Suspense for non-prefetched queries)
       if (isServer && httpClient) {
         return await httpClient.query(query, source.args)
       }
@@ -119,8 +125,7 @@ export function useQuery<Query extends FunctionReference<'query'>>(
         // Cache miss, continue to fetch
       }
 
-      // Use initial data if nothing else available
-      const opts = getOptions()
+      // Use initial data if nothing else available (client-side)
       if (opts.initialData !== undefined && !hasReceivedData()) {
         return opts.initialData
       }
