@@ -8,29 +8,38 @@ import { getFunctionName } from 'convex/server';
 function resolve(value) {
   return typeof value === "function" ? value() : value;
 }
+var ConvexQueryClient = class {
+  constructor(url, options) {
+    if (!url || typeof url !== "string") {
+      throw new Error("ConvexQueryClient requires a valid URL string");
+    }
+    this.client = new ConvexClient(url, {
+      disabled: isServer,
+      ...options
+    });
+    if (isServer) {
+      this.serverHttpClient = new ConvexHttpClient(url);
+    }
+  }
+  close() {
+    this.client.close();
+  }
+};
 var [ConvexProvider, useConvexClient] = createContextProvider((props) => {
   return props.client;
 });
-var clientUrls = /* @__PURE__ */ new WeakMap();
 function setupConvex(url, options) {
-  if (!url || typeof url !== "string") {
-    throw new Error("setupConvex requires a valid URL string");
-  }
-  const client = new ConvexClient(url, {
-    disabled: isServer,
-    ...options
-  });
-  clientUrls.set(client, url);
-  onCleanup(() => client.close());
-  return client;
+  const convexQueryClient = new ConvexQueryClient(url, options);
+  onCleanup(() => convexQueryClient.close());
+  return convexQueryClient;
 }
 function useQuery(query, args, options) {
-  const client = useConvexClient();
-  if (!client) {
+  const convexQueryClient = useConvexClient();
+  if (!convexQueryClient) {
     throw new Error("useQuery must be used within ConvexProvider");
   }
-  const url = clientUrls.get(client);
-  const httpClient = isServer && url ? new ConvexHttpClient(url) : null;
+  const client = convexQueryClient.client;
+  const httpClient = convexQueryClient.serverHttpClient;
   const getArgs = createMemo(() => resolve(args));
   const getOptions = createMemo(() => resolve(options ?? {}));
   const [liveData, setLiveData] = createSignal();
@@ -100,10 +109,11 @@ function useQuery(query, args, options) {
   };
 }
 function useMutation(mutation) {
-  const client = useConvexClient();
-  if (!client) {
+  const convexQueryClient = useConvexClient();
+  if (!convexQueryClient) {
     throw new Error("useMutation must be used within ConvexProvider");
   }
+  const client = convexQueryClient.client;
   const [state, setState] = createSignal({
     isLoading: false
   });
@@ -140,10 +150,11 @@ function useMutation(mutation) {
   };
 }
 function useAction(action) {
-  const client = useConvexClient();
-  if (!client) {
+  const convexQueryClient = useConvexClient();
+  if (!convexQueryClient) {
     throw new Error("useAction must be used within ConvexProvider");
   }
+  const client = convexQueryClient.client;
   const [state, setState] = createSignal({
     isLoading: false
   });
@@ -180,4 +191,4 @@ function useAction(action) {
   };
 }
 
-export { ConvexProvider, setupConvex, useAction, useConvexClient, useMutation, useQuery };
+export { ConvexProvider, ConvexQueryClient, setupConvex, useAction, useConvexClient, useMutation, useQuery };

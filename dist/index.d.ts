@@ -1,14 +1,20 @@
 import * as _solid_primitives_context from '@solid-primitives/context';
 import { Accessor } from 'solid-js';
-import { ConvexClient, ConvexClientOptions } from 'convex/browser';
+import { ConvexClient, ConvexHttpClient, ConvexClientOptions } from 'convex/browser';
 import { FunctionReference, FunctionArgs, FunctionReturnType } from 'convex/server';
 
 type MaybeAccessor<T> = T | Accessor<T>;
-declare const ConvexProvider: _solid_primitives_context.ContextProvider<{
+declare class ConvexQueryClient {
     client: ConvexClient;
+    serverHttpClient?: ConvexHttpClient;
+    constructor(url: string, options?: ConvexClientOptions);
+    close(): void;
+}
+declare const ConvexProvider: _solid_primitives_context.ContextProvider<{
+    client: ConvexQueryClient;
 }>;
-declare const useConvexClient: () => ConvexClient | undefined;
-declare function setupConvex(url: string, options?: ConvexClientOptions): ConvexClient;
+declare const useConvexClient: () => ConvexQueryClient | undefined;
+declare function setupConvex(url: string, options?: ConvexClientOptions): ConvexQueryClient;
 interface QueryOptions<T> {
     enabled?: boolean;
     initialData?: T;
@@ -33,4 +39,4 @@ interface MutationReturn<TArgs, TResult> {
 declare function useMutation<Mutation extends FunctionReference<'mutation'>>(mutation: Mutation): MutationReturn<FunctionArgs<Mutation>, FunctionReturnType<Mutation>>;
 declare function useAction<Action extends FunctionReference<'action'>>(action: Action): MutationReturn<FunctionArgs<Action>, FunctionReturnType<Action>>;
 
-export { ConvexProvider, setupConvex, useAction, useConvexClient, useMutation, useQuery };
+export { ConvexProvider, ConvexQueryClient, setupConvex, useAction, useConvexClient, useMutation, useQuery };

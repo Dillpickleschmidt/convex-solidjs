@@ -25,32 +25,43 @@ function resolve<T>(value: MaybeAccessor<T>): T {
   return typeof value === 'function' ? (value as Accessor<T>)() : value
 }
 
+// ConvexQueryClient class (matches React's convex-tanstack-query API)
+export class ConvexQueryClient {
+  client: ConvexClient
+  serverHttpClient?: ConvexHttpClient
+
+  constructor(url: string, options?: ConvexClientOptions) {
+    if (!url || typeof url !== 'string') {
+      throw new Error('ConvexQueryClient requires a valid URL string')
+    }
+
+    this.client = new ConvexClient(url, {
+      disabled: isServer,
+      ...options,
+    })
+
+    if (isServer) {
+      this.serverHttpClient = new ConvexHttpClient(url)
+    }
+  }
+
+  close() {
+    this.client.close()
+  }
+}
+
 // Create context with proper typing
 export const [ConvexProvider, useConvexClient] = createContextProvider(
-  (props: { client: ConvexClient }) => {
+  (props: { client: ConvexQueryClient }) => {
     return props.client
   },
 )
 
-// Store URLs for clients (ConvexReactClient exposes url property but ConvexClient doesn't)
-const clientUrls = new WeakMap<ConvexClient, string>()
-
-// Setup function
-export function setupConvex(url: string, options?: ConvexClientOptions): ConvexClient {
-  if (!url || typeof url !== 'string') {
-    throw new Error('setupConvex requires a valid URL string')
-  }
-
-  const client = new ConvexClient(url, {
-    disabled: isServer,
-    ...options,
-  })
-
-  // Store URL for later use in useQuery (for SSR with ConvexHttpClient)
-  clientUrls.set(client, url)
-
-  onCleanup(() => client.close())
-  return client
+// Setup function (returns ConvexQueryClient for convenience)
+export function setupConvex(url: string, options?: ConvexClientOptions): ConvexQueryClient {
+  const convexQueryClient = new ConvexQueryClient(url, options)
+  onCleanup(() => convexQueryClient.close())
+  return convexQueryClient
 }
 
 // Query options
@@ -77,14 +88,13 @@ export function useQuery<Query extends FunctionReference<'query'>>(
 ): QueryReturn<FunctionReturnType<Query>> {
   type Data = FunctionReturnType<Query>
 
-  const client = useConvexClient()
-  if (!client) {
+  const convexQueryClient = useConvexClient()
+  if (!convexQueryClient) {
     throw new Error('useQuery must be used within ConvexProvider')
   }
 
-  // Get URL from WeakMap, create HTTP client for SSR
-  const url = clientUrls.get(client)
-  const httpClient = isServer && url ? new ConvexHttpClient(url) : null
+  const client = convexQueryClient.client
+  const httpClient = convexQueryClient.serverHttpClient
 
   // Resolve reactive values
   const getArgs = createMemo(() => resolve(args))
@@ -212,10 +222,12 @@ export function useMutation<Mutation extends FunctionReference<'mutation'>>(
   type Args = FunctionArgs<Mutation>
   type Result = FunctionReturnType<Mutation>
 
-  const client = useConvexClient()
-  if (!client) {
+  const convexQueryClient = useConvexClient()
+  if (!convexQueryClient) {
     throw new Error('useMutation must be used within ConvexProvider')
   }
+
+  const client = convexQueryClient.client
 
   const [state, setState] = createSignal<MutationState<Result>>({
     isLoading: false,
@@ -254,10 +266,12 @@ export function useAction<Action extends FunctionReference<'action'>>(
   type Args = FunctionArgs<Action>
   type Result = FunctionReturnType<Action>
 
-  const client = useConvexClient()
-  if (!client) {
+  const convexQueryClient = useConvexClient()
+  if (!convexQueryClient) {
     throw new Error('useAction must be used within ConvexProvider')
   }
+
+  const client = convexQueryClient.client
 
   const [state, setState] = createSignal<MutationState<Result>>({
     isLoading: false,
