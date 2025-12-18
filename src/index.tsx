@@ -10,7 +10,7 @@ import {
 } from 'solid-js'
 import { isServer } from 'solid-js/web'
 import { createContextProvider } from '@solid-primitives/context'
-import { ConvexClient, type ConvexClientOptions } from 'convex/browser'
+import { ConvexClient, ConvexHttpClient, type ConvexClientOptions } from 'convex/browser'
 import {
   type FunctionReference,
   type FunctionArgs,
@@ -32,6 +32,9 @@ export const [ConvexProvider, useConvexClient] = createContextProvider(
   },
 )
 
+// Store URLs for clients (ConvexReactClient exposes url property but ConvexClient doesn't)
+const clientUrls = new WeakMap<ConvexClient, string>()
+
 // Setup function
 export function setupConvex(url: string, options?: ConvexClientOptions): ConvexClient {
   if (!url || typeof url !== 'string') {
@@ -42,6 +45,9 @@ export function setupConvex(url: string, options?: ConvexClientOptions): ConvexC
     disabled: isServer,
     ...options,
   })
+
+  // Store URL for later use in useQuery (for SSR with ConvexHttpClient)
+  clientUrls.set(client, url)
 
   onCleanup(() => client.close())
   return client
@@ -76,6 +82,10 @@ export function useQuery<Query extends FunctionReference<'query'>>(
     throw new Error('useQuery must be used within ConvexProvider')
   }
 
+  // Get URL from WeakMap, create HTTP client for SSR
+  const url = clientUrls.get(client)
+  const httpClient = isServer && url ? new ConvexHttpClient(url) : null
+
   // Resolve reactive values
   const getArgs = createMemo(() => resolve(args))
   const getOptions = createMemo(() => resolve(options ?? {}))
@@ -96,7 +106,12 @@ export function useQuery<Query extends FunctionReference<'query'>>(
       return { args: getArgs(), version: version() }
     },
     async source => {
-      // Try sync result first
+      // Server: use HTTP client to actually fetch data (enables Suspense)
+      if (isServer && httpClient) {
+        return await httpClient.query(query, source.args)
+      }
+
+      // Client: check local cache first
       try {
         const result = client.client.localQueryResult(getFunctionName(query), source.args)
         if (result !== undefined) return result as Data
