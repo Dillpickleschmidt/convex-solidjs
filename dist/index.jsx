@@ -110,10 +110,7 @@ function useQuery(query, args, options) {
   const data = createMemo(() => {
     const live = liveData();
     if (live !== void 0) return live;
-    const opts = getOptions();
-    if (opts.keepPreviousData && resource.latest) {
-      return resource.latest;
-    }
+    if (resource.latest !== void 0) return resource.latest;
     return resource();
   });
   const error = createMemo(() => liveError() ?? resource.error);

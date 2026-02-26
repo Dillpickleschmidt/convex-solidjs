@@ -177,10 +177,8 @@ export function useQuery<Query extends FunctionReference<'query'>>(
   const data = createMemo(() => {
     const live = liveData()
     if (live !== undefined) return live
-    const opts = getOptions()
-    if (opts.keepPreviousData && resource.latest) {
-      return resource.latest
-    }
+    // Use resource.latest to prevent Suspense re-triggering after initial resolve
+    if (resource.latest !== undefined) return resource.latest
     return resource()
   })
 
