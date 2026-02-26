@@ -57,7 +57,7 @@ function useQuery(query, args, options) {
   const getOptions = createMemo(() => resolve(options ?? {}));
   const [liveData, setLiveData] = createSignal();
   const [liveError, setLiveError] = createSignal();
-  const [hasReceivedData, setHasReceivedData] = createSignal(false);
+  const initialData = getOptions().initialData;
   const [resource, { refetch }] = createResource(
     () => {
       const opts = getOptions();
@@ -65,10 +65,6 @@ function useQuery(query, args, options) {
       return { args: getArgs() };
     },
     async (source) => {
-      const opts = getOptions();
-      if (isServer && opts.initialData !== void 0) {
-        return opts.initialData;
-      }
       if (isServer && httpClient) {
         return await httpClient.query(query, source.args);
       }
@@ -77,11 +73,9 @@ function useQuery(query, args, options) {
         if (result !== void 0) return result;
       } catch {
       }
-      if (opts.initialData !== void 0 && !hasReceivedData()) {
-        return opts.initialData;
-      }
       return await client.query(query, source.args);
-    }
+    },
+    ...initialData !== void 0 ? [{ initialValue: initialData }] : []
   );
   createEffect(
     on([getArgs, () => getOptions().enabled], ([args2, enabled]) => {
@@ -93,14 +87,12 @@ function useQuery(query, args, options) {
           batch(() => {
             setLiveData(() => data2);
             setLiveError(void 0);
-            setHasReceivedData(true);
           });
         },
         (error2) => {
           batch(() => {
             setLiveError(() => error2);
             setLiveData(void 0);
-            setHasReceivedData(true);
           });
         }
       );

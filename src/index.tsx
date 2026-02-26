@@ -103,9 +103,9 @@ export function useQuery<Query extends FunctionReference<'query'>>(
   // Track real-time updates
   const [liveData, setLiveData] = createSignal<Data | undefined>()
   const [liveError, setLiveError] = createSignal<Error | undefined>()
-  const [hasReceivedData, setHasReceivedData] = createSignal(false)
 
   // Resource for data fetching
+  const initialData = getOptions().initialData
   const [resource, { refetch }] = createResource<
     Data | undefined,
     { args: FunctionArgs<Query> }
@@ -116,13 +116,7 @@ export function useQuery<Query extends FunctionReference<'query'>>(
       return { args: getArgs() }
     },
     async source => {
-      // Server: if initialData provided (e.g., from authenticated loader), use it
-      const opts = getOptions()
-      if (isServer && opts.initialData !== undefined) {
-        return opts.initialData
-      }
-
-      // Server: use HTTP client to fetch data (enables Suspense for non-prefetched queries)
+      // Server: use HTTP client to fetch data (enables Suspense)
       if (isServer && httpClient) {
         return await httpClient.query(query, source.args)
       }
@@ -135,14 +129,10 @@ export function useQuery<Query extends FunctionReference<'query'>>(
         // Cache miss, continue to fetch
       }
 
-      // Use initial data if nothing else available (client-side)
-      if (opts.initialData !== undefined && !hasReceivedData()) {
-        return opts.initialData
-      }
-
       // Client: fetch via WebSocket
       return await client.query(query, source.args)
     },
+    ...(initialData !== undefined ? [{ initialValue: initialData }] : []),
   )
 
   // Set up subscription
@@ -157,14 +147,12 @@ export function useQuery<Query extends FunctionReference<'query'>>(
           batch(() => {
             setLiveData(() => data as Data)
             setLiveError(undefined)
-            setHasReceivedData(true)
           })
         },
         error => {
           batch(() => {
             setLiveError(() => error)
             setLiveData(undefined)
-            setHasReceivedData(true)
           })
         },
       )
